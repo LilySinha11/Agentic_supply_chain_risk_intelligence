@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 from langgraph.graph import StateGraph, START, END
-from openai import OpenAI
+from groq import Groq 
 
 # Import MCP modules
 from .mcp.graph_mcp import GraphMCP
@@ -16,7 +16,7 @@ from .mcp.data_mcp import DataMCP
 # Load API Key
 # ====================================================
 load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # ====================================================
 # Agent State
@@ -37,26 +37,43 @@ class AgentState(BaseModel):
 
 
 # ====================================================
-# Step 1 — Intent Classification
+# Step 1 — Intent Classification (FIXED)
 # ====================================================
 def llm_route(state: AgentState) -> AgentState:
     prompt = f"""
-Classify the user's intent into one of these:
+You are an intent classifier for a supply chain risk AI agent.
 
-- GRAPH_QUERY: General Neo4j graph questions
-- RISK_REPORT: Ask for risk analysis or risk explanation
-- DATA_UPDATE: Add/update supplier info
-- NEWS_QUERY: Ask for latest events/news affecting FMCG suppliers
-- SUPPLIER_RISK: Ask how risky a specific supplier is
-- EVENT_SEVERITY: Ask for highest severity events globally
+Classify the user's intent into ONE of the following labels:
 
-Return ONLY the label.
+- SUPPLIER_RISK:
+  Use ONLY if the question clearly mentions a specific supplier name
+  (e.g. "How risky is ITC Limited?", "Risk score for Hindustan Unilever").
 
-User Message: {state.message}
+- EVENT_SEVERITY:
+  Use for country-level or general risk severity questions
+  (e.g. "What is the risk severity in India?",
+        "Show highest severity risks in India").
+
+- NEWS_QUERY:
+  Questions about recent news or events affecting suppliers or countries.
+
+- GRAPH_QUERY:
+  General Neo4j graph or relationship questions.
+
+- RISK_REPORT:
+  Requests for explanation or summaries of risk.
+
+- DATA_UPDATE:
+  Requests to add or update supplier or risk data.
+
+Return ONLY the label name.
+
+User message:
+{state.message}
 """
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="llama-3.1-8b-instant",
         messages=[{"role": "user", "content": prompt}],
         temperature=0
     )
@@ -85,7 +102,6 @@ User Message: {state.message}
 def handle_graph(state: AgentState) -> AgentState:
     g = GraphMCP()
     try:
-        # Default: top risky suppliers
         state.result = g.top_risky_suppliers(limit=5)
     finally:
         g.close()
@@ -93,7 +109,7 @@ def handle_graph(state: AgentState) -> AgentState:
 
 
 # ====================================================
-# Step 2B — Supplier Risk Report (old)
+# Step 2B — Supplier Risk Report (legacy)
 # ====================================================
 def handle_risk(state: AgentState) -> AgentState:
     r = RiskMCP()
@@ -125,27 +141,51 @@ def handle_data(state: AgentState) -> AgentState:
 
 
 # ====================================================
-# Step 2D — NEW: Latest Supplier News
+# Step 2D — Latest Supplier News
 # ====================================================
 def handle_news(state: AgentState) -> AgentState:
     g = GraphMCP()
     try:
-        supplier_name = state.message
-        state.result = g.latest_supplier_events(supplier_name)
+        state.result = g.latest_supplier_events(state.message)
     finally:
         g.close()
-
     return state
 
 
 # ====================================================
-# Step 2E — NEW: Supplier Risk Summary
+# Step 2E — Supplier Risk Summary (GUARDED)
 # ====================================================
 def handle_supplier_risk(state: AgentState) -> AgentState:
     g = GraphMCP()
     try:
-        supplier_name = state.message
+        text = state.message.strip()
+
+        # Known suppliers lookup (simple, effective)
+        known_suppliers = [
+            "ITC Limited",
+            "Hindustan Unilever",
+            "Dabur India",
+            "Britannia Industries",
+            "Nestle India",
+            "Marico",
+            "Godrej Consumer Products",
+            "Colgate-Palmolive India"
+        ]
+
+        supplier_name = None
+        for s in known_suppliers:
+            if s.lower() in text.lower():
+                supplier_name = s
+                break
+
+        if not supplier_name:
+            state.result = {
+                "error": "Please specify a valid supplier name (e.g. 'ITC Limited')."
+            }
+            return state
+
         state.result = g.supplier_risk_summary(supplier_name)
+
     finally:
         g.close()
 
@@ -153,15 +193,14 @@ def handle_supplier_risk(state: AgentState) -> AgentState:
 
 
 # ====================================================
-# Step 2F — NEW: Highest Severity Events
+# Step 2F — Highest Severity Events (Country-level)
 # ====================================================
 def handle_event_severity(state: AgentState) -> AgentState:
     g = GraphMCP()
     try:
-        state.result = g.top_severe_events()
+        state.result = g.top_severe_events(country="India")
     finally:
         g.close()
-
     return state
 
 
@@ -216,11 +255,47 @@ graph = builder.compile()
 
 
 # ====================================================
-# Run Agent
+# Run Agent (GUARDED)
 # ====================================================
 def run_agent(message: str):
     state = AgentState(message=message)
     out = graph.invoke(state)
-    if isinstance(out, dict):
-        return out.get("result", {})
-    return getattr(out, "result", {})
+
+    result = out.get("result", {}) if isinstance(out, dict) else out.result
+
+    # ---- Guard: empty or error ----
+    if not result or (isinstance(result, dict) and "error" in result):
+        return {
+            "data": result,
+            "explanation": (
+                result.get("error")
+                if isinstance(result, dict)
+                else "No risk data found for the given criteria."
+            )
+        }
+
+    # ---- LLM Explanation ----
+    prompt = f"""
+You are a supply chain risk analyst.
+
+User question:
+{message}
+
+Agent data:
+{result}
+
+Explain the risk clearly in 3–4 lines.
+"""
+
+    response = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3
+    )
+
+    explanation = response.choices[0].message.content
+
+    return {
+        "data": result,
+        "explanation": explanation
+    }

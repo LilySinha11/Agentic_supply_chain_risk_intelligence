@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Supply Chain Risk Agent</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            background-color: #f4f6f9;
+        }
+
+        .chat-card {
+            border-radius: 12px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.1);
+        }
+
+        .chat-header {
+            background: #1f2933;
+            color: white;
+            border-radius: 12px 12px 0 0;
+            padding: 15px;
+        }
+
+        .supplier-badge {
+            background-color: #0d6efd;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        .chat-body {
+            padding: 20px;
+            background-color: #ffffff;
+        }
+
+        .chat-footer {
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .agent-response {
+            background: #eef2ff;
+            border-left: 4px solid #4f46e5;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+
+        .agent-data {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container mt-5" style="max-width: 900px;">
+
+    <div class="card chat-card">
+
+        <!-- Header -->
+        <div class="chat-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">🤖 Supply Chain Risk Intelligence Agent</h5>
+            <span id="supplierBadge" class="supplier-badge d-none"></span>
+        </div>
+
+        <!-- Body -->
+        <div class="chat-body">
+
+            <div class="mb-3">
+                <label class="form-label fw-bold">Ask a question</label>
+                <textarea id="question" class="form-control" rows="2"
+                          placeholder="e.g. How risky is ITC Limited?"></textarea>
+            </div>
+
+            <button class="btn btn-dark" onclick="askAgent()">Ask Agent</button>
+
+            <hr class="my-4">
+
+            <h6>🧠 AI Explanation</h6>
+            <div id="explanation" class="agent-response text-muted">
+                Ask a question to get insights.
+            </div>
+
+            <h6>📊 Agent Data</h6>
+            <div id="data" class="agent-data text-muted">
+                No data yet.
+            </div>
+
+        </div>
+
+        <!-- Footer -->
+        <div class="chat-footer text-end">
+            <a href="/supplier-dashboard" class="btn btn-outline-secondary btn-sm">
+                ← Back to Dashboard
+            </a>
+        </div>
+
+    </div>
+</div>
+
+<script src="/static/agent.js"></script>
+
+<script>
+    // Prefill from dashboard
+    const params = new URLSearchParams(window.location.search);
+    const supplier = params.get("supplier");
+
+    if (supplier) {
+        document.getElementById("question").value = `How risky is ${supplier}?`;
+        const badge = document.getElementById("supplierBadge");
+        badge.innerText = supplier;
+        badge.classList.remove("d-none");
+    }
+</script>
+
+</body>
+</html>

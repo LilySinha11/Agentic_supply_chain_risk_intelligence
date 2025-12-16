@@ -1,6 +1,6 @@
 import os
 import json
-from openai import OpenAI
+from groq import Groq
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -8,11 +8,9 @@ BASE_DIR = os.path.dirname(os.path.dirname(__file__))
 env_path = os.path.join(BASE_DIR, ".env")
 load_dotenv(env_path)
 
-# Get API key
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Create OpenAI client properly
-client = OpenAI(api_key=OPENAI_API_KEY)
+# Create Groq key.
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 def analyze_text(text):
     prompt = f"""
@@ -31,11 +29,9 @@ def analyze_text(text):
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.2
+        model="llama-3.1-8b-instant",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0
         )
 
         raw = response.choices[0].message.content.strip()

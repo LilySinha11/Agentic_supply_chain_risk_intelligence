@@ -3,6 +3,8 @@ from flask import Flask, jsonify, render_template, request
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 import requests
+from backend.langgraph_agent_reference import run_agent
+
 
 # =========================
 # Load .env
@@ -46,26 +48,6 @@ def test_neo4j():
         return jsonify(ok=False, error=str(e))
 
 
-# -------------------------
-#  SUPPLIERS DASHBOARD
-# -------------------------
-@app.route("/suppliers")
-def suppliers_dashboard():
-    driver = get_neo4j_driver()
-    query = """
-    MATCH (s:Supplier)
-    OPTIONAL MATCH (s)-[:SUPPLIES]->(p:Product)
-    OPTIONAL MATCH (s)<-[:AFFECTS]-(e:RiskEvent)
-    RETURN s.name AS supplier,
-           s.id AS id,
-           s.country AS country,
-           collect(DISTINCT p.name) AS products,
-           collect(DISTINCT e.type) AS risk_events,
-           s.risk AS risk_score
-    """
-    with driver.session() as session:
-        records = session.run(query).data()
-    return render_template("suppliers.html", suppliers=records)
 
 
 # -------------------------
@@ -123,6 +105,63 @@ def api_supplier_detail(sid):
     if not result:
         return jsonify({})
     return jsonify(result["supplier"])
+
+
+@app.route("/agent-ui")
+def agent_ui():
+    return render_template("agent.html")    
+
+@app.route("/api/agent", methods=["POST"])
+def api_agent():
+    data = request.get_json()
+    message = data.get("message")
+
+    if not message:
+        return jsonify({"error": "Message is required"}), 400
+
+    try:
+        result = run_agent(message)
+        return jsonify({
+            "answer": result
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/supplier-dashboard")
+def supplier_dashboard():
+    from neo4j import GraphDatabase
+    import os
+
+    driver = GraphDatabase.driver(
+        os.getenv("NEO4J_URI"),
+        auth=(os.getenv("NEO4J_USER"), os.getenv("NEO4J_PASSWORD"))
+    )
+
+    query = """
+    MATCH (s:Supplier)
+    OPTIONAL MATCH (e:RiskEvent)-[:AFFECTS]->(s)
+    WITH s,
+         collect(DISTINCT e.type) AS risk_events,
+         coalesce(avg(e.severity), 0.0) AS avg_risk
+    RETURN
+        s.name AS supplier,
+        s.country AS country,
+        avg_risk AS risk_score,
+        risk_events
+    ORDER BY risk_score DESC
+    """
+
+    with driver.session() as session:
+        suppliers = session.run(query).data()
+
+    driver.close()
+
+    return render_template(
+        "supplier_dashboard.html",
+        suppliers=suppliers
+    )
+
 
 
 # =========================
