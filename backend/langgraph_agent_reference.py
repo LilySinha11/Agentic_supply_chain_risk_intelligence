@@ -12,6 +12,10 @@ from .mcp.graph_mcp import GraphMCP
 from .mcp.risk_mcp import RiskMCP
 from .mcp.data_mcp import DataMCP
 
+from backend.ai_utils import extract_supplier_from_message
+
+
+
 # ====================================================
 # Load API Key
 # ====================================================
@@ -139,37 +143,22 @@ def handle_data(state: AgentState) -> AgentState:
         d.close()
     return state
 
-def extract_supplier_from_message(message: str) -> str | None:
-    known_suppliers = [
-        "ITC Limited",
-        "Hindustan Unilever",
-        "Dabur India",
-        "Britannia Industries",
-        "Nestle India",
-        "Marico",
-        "Godrej Consumer Products",
-        "Colgate-Palmolive India"
-    ]
 
-    msg_lower = message.lower()
-    for s in known_suppliers:
-        if s.lower() in msg_lower:
-            return s
-
-    return None
 
 
 # ====================================================
 # Step 2D — Latest Supplier News
 # ====================================================
 def handle_news(state: AgentState) -> AgentState:
+    from backend.ai_utils import extract_supplier_from_message
     g = GraphMCP()
+
     try:
         supplier_name = extract_supplier_from_message(state.message)
 
         if not supplier_name:
             state.result = {
-                "error": "Please specify a valid supplier name."
+                "error": "Please specify a supplier name for news lookup."
             }
             return state
 
@@ -181,17 +170,20 @@ def handle_news(state: AgentState) -> AgentState:
     return state
 
 
+
 # ====================================================
 # Step 2E — Supplier Risk Summary (GUARDED)
 # ====================================================
 def handle_supplier_risk(state: AgentState) -> AgentState:
+    from backend.ai_utils import extract_supplier_from_message
     g = GraphMCP()
+
     try:
         supplier_name = extract_supplier_from_message(state.message)
 
         if not supplier_name:
             state.result = {
-                "error": "Please specify a valid supplier name (e.g. 'ITC Limited')."
+                "error": "Could not identify supplier. Please mention a supplier name."
             }
             return state
 
@@ -201,6 +193,7 @@ def handle_supplier_risk(state: AgentState) -> AgentState:
         g.close()
 
     return state
+
 
 
 # ====================================================

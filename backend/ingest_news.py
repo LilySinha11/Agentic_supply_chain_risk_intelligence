@@ -17,7 +17,7 @@ print("Loading .env from:", env_path)
 load_dotenv(env_path)
 
 
-from ai_utils import analyze_text
+from backend.ai_utils import analyze_text
 
 
 # ====================================

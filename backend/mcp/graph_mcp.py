@@ -1,7 +1,7 @@
 from neo4j import GraphDatabase
 import os
 from dotenv import load_dotenv
-from backend.ai_utils import serialize_record
+from backend.utils.neo4j_utils import serialize_record
 
 load_dotenv()
 
@@ -104,3 +104,20 @@ class GraphMCP:
             "country": country,
             "limit": limit
         })
+
+
+# -----------------------------------
+    # 5) Get All Suppliers (Dynamic)
+    # -----------------------------------
+    def get_all_suppliers(self):
+        """
+        Returns all suppliers with possible aliases.
+        aliases is optional and may be empty.
+        """
+        query = """
+        MATCH (s:Supplier)
+        RETURN
+            s.name AS name,
+            coalesce(s.aliases, []) AS aliases
+        """
+        return self.run_query(query)

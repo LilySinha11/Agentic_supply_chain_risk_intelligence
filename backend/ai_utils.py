@@ -4,6 +4,8 @@ from groq import Groq
 from dotenv import load_dotenv
 from datetime import datetime, date
 from neo4j.time import DateTime as Neo4jDateTime
+from backend.utils.neo4j_utils import serialize_record
+from backend.mcp.graph_mcp import GraphMCP
 
 
 # Load environment variables
@@ -76,3 +78,39 @@ def serialize_record(obj):
         return [serialize_record(i) for i in obj]
     else:
         return serialize_value(obj)
+
+def load_all_suppliers():
+    """
+    Fetch all suppliers dynamically from Neo4j.
+    """
+    g = GraphMCP()
+    try:
+        suppliers = g.get_all_suppliers()
+        return suppliers
+    finally:
+        g.close()    
+
+
+def extract_supplier_from_message(message: str):
+    """
+    Extract supplier name from user message using Neo4j-loaded suppliers
+    """
+    from backend.ai_utils import load_all_suppliers  # local import to avoid circular
+
+    message_lower = message.lower()
+    suppliers = load_all_suppliers()
+
+    for supplier in suppliers:
+        name = supplier["name"]
+        aliases = supplier.get("aliases", [])
+
+        # Match full name
+        if name.lower() in message_lower:
+            return name
+
+        # Match aliases
+        for alias in aliases:
+            if alias.lower() in message_lower:
+                return name
+
+    return None
