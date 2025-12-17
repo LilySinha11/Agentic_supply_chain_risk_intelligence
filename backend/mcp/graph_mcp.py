@@ -1,8 +1,10 @@
 from neo4j import GraphDatabase
 import os
 from dotenv import load_dotenv
+from backend.ai_utils import serialize_record
 
 load_dotenv()
+
 
 class GraphMCP:
     def __init__(self):
@@ -19,12 +21,13 @@ class GraphMCP:
         self.driver.close()
 
     # -----------------------------------
-    # Helper: Run Cypher Query
+    # Helper: Run Cypher Query (SAFE)
     # -----------------------------------
     def run_query(self, query, params=None):
         with self.driver.session() as session:
             result = session.run(query, params or {})
-            return [record.data() for record in result]
+            raw = [record.data() for record in result]
+            return serialize_record(raw) if raw else []
 
     # -----------------------------------
     # 1) Top Risky Suppliers
@@ -54,13 +57,18 @@ class GraphMCP:
         query = """
         MATCH (e:RiskEvent)-[:AFFECTS]->(s:Supplier)
         WHERE toLower(s.name) CONTAINS toLower($supplier)
-        RETURN e.summary AS summary,
-               e.severity AS severity,
-               e.ingested_at AS time
-        ORDER BY time DESC
+        RETURN
+            e.type AS event_type,
+            e.summary AS summary,
+            e.severity AS severity,
+            e.ingested_at AS ingested_at
+        ORDER BY ingested_at DESC
         LIMIT $limit
         """
-        return self.run_query(query, {"supplier": supplier, "limit": limit})
+        return self.run_query(query, {
+            "supplier": supplier,
+            "limit": limit
+        })
 
     # -----------------------------------
     # 3) Supplier Risk Summary
@@ -78,7 +86,7 @@ class GraphMCP:
         return self.run_query(query, {"supplier": supplier})
 
     # -----------------------------------
-    # 4) Top Severe Events (Global)
+    # 4) Top Severe Events (Country)
     # -----------------------------------
     def top_severe_events(self, country="India", limit=5):
         query = """

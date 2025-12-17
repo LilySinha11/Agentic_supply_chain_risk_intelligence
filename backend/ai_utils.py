@@ -2,6 +2,9 @@ import os
 import json
 from groq import Groq
 from dotenv import load_dotenv
+from datetime import datetime, date
+from neo4j.time import DateTime as Neo4jDateTime
+
 
 # Load environment variables
 BASE_DIR = os.path.dirname(os.path.dirname(__file__))
@@ -55,3 +58,21 @@ def analyze_text(text):
             "entities": [],
             "severity": 0.3
         }
+
+
+def serialize_value(value):
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+
+    if isinstance(value, Neo4jDateTime):
+        return value.to_native().isoformat()
+
+    return value
+
+def serialize_record(obj):
+    if isinstance(obj, dict):
+        return {k: serialize_record(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [serialize_record(i) for i in obj]
+    else:
+        return serialize_value(obj)

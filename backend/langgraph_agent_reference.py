@@ -139,6 +139,25 @@ def handle_data(state: AgentState) -> AgentState:
         d.close()
     return state
 
+def extract_supplier_from_message(message: str) -> str | None:
+    known_suppliers = [
+        "ITC Limited",
+        "Hindustan Unilever",
+        "Dabur India",
+        "Britannia Industries",
+        "Nestle India",
+        "Marico",
+        "Godrej Consumer Products",
+        "Colgate-Palmolive India"
+    ]
+
+    msg_lower = message.lower()
+    for s in known_suppliers:
+        if s.lower() in msg_lower:
+            return s
+
+    return None
+
 
 # ====================================================
 # Step 2D — Latest Supplier News
@@ -146,9 +165,19 @@ def handle_data(state: AgentState) -> AgentState:
 def handle_news(state: AgentState) -> AgentState:
     g = GraphMCP()
     try:
-        state.result = g.latest_supplier_events(state.message)
+        supplier_name = extract_supplier_from_message(state.message)
+
+        if not supplier_name:
+            state.result = {
+                "error": "Please specify a valid supplier name."
+            }
+            return state
+
+        state.result = g.latest_supplier_events(supplier_name)
+
     finally:
         g.close()
+
     return state
 
 
@@ -158,25 +187,7 @@ def handle_news(state: AgentState) -> AgentState:
 def handle_supplier_risk(state: AgentState) -> AgentState:
     g = GraphMCP()
     try:
-        text = state.message.strip()
-
-        # Known suppliers lookup (simple, effective)
-        known_suppliers = [
-            "ITC Limited",
-            "Hindustan Unilever",
-            "Dabur India",
-            "Britannia Industries",
-            "Nestle India",
-            "Marico",
-            "Godrej Consumer Products",
-            "Colgate-Palmolive India"
-        ]
-
-        supplier_name = None
-        for s in known_suppliers:
-            if s.lower() in text.lower():
-                supplier_name = s
-                break
+        supplier_name = extract_supplier_from_message(state.message)
 
         if not supplier_name:
             state.result = {

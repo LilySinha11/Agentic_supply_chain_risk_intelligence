@@ -107,9 +107,26 @@ def api_supplier_detail(sid):
     return jsonify(result["supplier"])
 
 
-@app.route("/agent-ui")
+@app.route("/agent-ui", methods=["GET", "POST"])
 def agent_ui():
-    return render_template("agent.html")    
+    supplier = request.args.get("supplier")  # ✅ READ FROM URL
+
+    response = None
+    if request.method == "POST":
+        user_question = request.form.get("message")
+
+        # ✅ inject supplier into question if missing
+        if supplier and supplier.lower() not in user_question.lower():
+            user_question = f"{user_question} for {supplier}"
+
+        response = run_agent(user_question)
+
+    return render_template(
+        "agent.html",
+        response=response,
+        supplier=supplier
+    )
+   
 
 @app.route("/api/agent", methods=["POST"])
 def api_agent():
